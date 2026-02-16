@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+
+# Streamlit
+.streamlit/
+
+# Local FAISS index (optional, but good to keep clean)
+faiss_index/
+data/
+
+# OS
+.DS_Store
+Thumbs.db

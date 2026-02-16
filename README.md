@@ -6,7 +6,7 @@ A basic Streamlit-based application that leverages Amazon Bedrock for simple PDF
 
 - **Chat PDF**: Upload your own PDF documents and query them using advanced LLMs and vector search.
   - **Dynamic Upload**: Upload multiple PDFs via the sidebar.
-  - **Vector Store**: Powered by FAISS and Amazon Titan Embeddings V2.
+  - **Vector Store**: Powered by FAISS and Amazon Titan Embeddings V1.
   - **LLMs**: Supports Mistral Large and Meta Llama 3 70B.
 - **Image Generation**: Generate high-quality images from text prompts.
   - **Model**: Powered by Amazon Titan Image Generator V2.
@@ -18,11 +18,11 @@ A basic Streamlit-based application that leverages Amazon Bedrock for simple PDF
 
 1.  **AWS Account**: Ensure you have an AWS account with access to Amazon Bedrock.
 2.  **Model Access**: Enable the following models in your AWS Bedrock console:
-    - Amazon Titan Embeddings V2
+    - Amazon Titan Embeddings G1 - Text (V1)
     - Amazon Titan Image Generator V2
-    - Anthropic Claude 3.7 Sonnet
-    - Meta Llama 3 70B
-3.  **AWS CLI**: Configured with credentials that have Bedrock permissions.
+    - Mistral Large (24.02)
+    - Meta Llama 3 70B Instruct
+3.  **AWS CLI**: Configured locally with credentials that have Bedrock permissions.
 
 ### Installation
 
@@ -31,6 +31,12 @@ A basic Streamlit-based application that leverages Amazon Bedrock for simple PDF
 
     ```bash
     pip install -r requirements.txt
+    ```
+
+3.  **Configure AWS**: Before running the application, you must configure your AWS credentials. Run the following command and follow the prompts:
+
+    ```bash
+    aws configure
     ```
 
 ## Usage
@@ -46,7 +52,7 @@ python -m streamlit run app.py
 2.  In the sidebar, click **"Browse files"** to upload one or more PDF documents.
 3.  Click **"Vectors Update"** to process and index the uploaded files.
 4.  Enter your question in the text input on the main page.
-5.  Click either **"Claude Output"** or **"Llama2 Output"** to get your answer.
+5.  Click either **"Mistral Output"** or **"Llama2 Output"** to get your answer.
 
 ### Image Generation Workflow
 1.  Switch to the **"Image Generation"** tab.
@@ -67,13 +73,14 @@ python -m streamlit run app.py
 ### Option 1: Streamlit Community Cloud (Easiest)
 1. Push your code to a GitHub repository.
 2. Go to [share.streamlit.io](https://share.streamlit.io) and connect your repo.
-3. **Manage Secrets**: In the Streamlit app settings, add your AWS credentials under "Secrets":
+3. **Manage Secrets**: In the Streamlit app settings (**Settings > Secrets**), add your AWS credentials in exactly this format:
    ```toml
-   AWS_ACCESS_KEY_ID = "your_access_key"
-   AWS_SECRET_ACCESS_KEY = "your_secret_key"
-   AWS_DEFAULT_REGION = "eu-west-2"
+   [aws]
+   access_key_id = "your_access_key"
+   secret_access_key = "your_secret_key"
+   region = "us-east-1"
    ```
-4. Streamlit will automatically pick these up for `boto3`.
+4. The app includes a **Diagnostic Status** in the sidebar to confirm if keys are loaded correctly.
 
 ### Option 2: AWS App Runner (Production-Ready)
 1. **Containerize**: Create a `Dockerfile` for your app.
