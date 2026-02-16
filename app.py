@@ -27,19 +27,28 @@ from langchain_core.prompts import PromptTemplate
 from langchain.chains import RetrievalQA
 
 ## Bedrock Clients
-def get_bedrock_client():
+def get_bedrock_client(region_name="us-east-1"):
     # Attempt to get region and credentials from environment or st.secrets
     region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
     
     # Check if we are on Streamlit Cloud and have secrets
-    if "AWS_ACCESS_KEY_ID" not in os.environ and "aws" in st.secrets:
-        return boto3.client(
-            service_name="bedrock-runtime",
-            region_name=st.secrets["aws"].get("region", region),
-            aws_access_key_id=st.secrets["aws"]["access_key_id"],
-            aws_secret_access_key=st.secrets["aws"]["secret_access_key"]
-        )
+    if "aws" in st.secrets:
+        # User might use different key names, let's be flexible
+        aws_secrets = st.secrets["aws"]
+        access_key = aws_secrets.get("access_key_id") or aws_secrets.get("aws_access_key_id")
+        secret_key = aws_secrets.get("secret_access_key") or aws_secrets.get("aws_secret_access_key")
+        target_region = region_name or aws_secrets.get("region") or aws_secrets.get("aws_region") or region
+        
+        if access_key and secret_key:
+            print(f"DEBUG: Initializing Bedrock client with Streamlit secrets in {target_region}")
+            return boto3.client(
+                service_name="bedrock-runtime",
+                region_name=target_region,
+                aws_access_key_id=access_key,
+                aws_secret_access_key=secret_key
+            )
     
+    print(f"DEBUG: Initializing Bedrock client with default environment in {region}")
     return boto3.client(service_name="bedrock-runtime", region_name=region)
 
 bedrock = get_bedrock_client()
@@ -108,7 +117,7 @@ def get_llama2_llm():
 
 def get_image_response(prompt_content):
     # Image generation might require us-east-1
-    bedrock_image = boto3.client(service_name="bedrock-runtime", region_name="us-east-1")
+    bedrock_image = get_bedrock_client(region_name="us-east-1")
     
     payload = {
         "taskType": "TEXT_IMAGE",
