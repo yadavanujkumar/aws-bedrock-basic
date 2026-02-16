@@ -3,7 +3,7 @@ awscli
 streamlit
 langchain
 langchain-community
-langchain-textsplitters
+langchain-text-splitters
 langchain-core
 faiss-cpu
 pypdf
