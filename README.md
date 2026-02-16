@@ -7,7 +7,7 @@ A basic Streamlit-based application that leverages Amazon Bedrock for simple PDF
 - **Chat PDF**: Upload your own PDF documents and query them using advanced LLMs and vector search.
   - **Dynamic Upload**: Upload multiple PDFs via the sidebar.
   - **Vector Store**: Powered by FAISS and Amazon Titan Embeddings V2.
-  - **LLMs**: Supports Anthropic Claude 3.7 Sonnet and Meta Llama 3 70B.
+  - **LLMs**: Supports Mistral Large and Meta Llama 3 70B.
 - **Image Generation**: Generate high-quality images from text prompts.
   - **Model**: Powered by Amazon Titan Image Generator V2.
   - **Region Support**: Automatically handles cross-region requests (Image models in `us-east-1`).

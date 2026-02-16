@@ -70,9 +70,9 @@ def get_vector_store(docs):
     )
     vectorstore_faiss.save_local("faiss_index")
 
-def get_claude_llm():
-    ##create the Anthropic Model
-    llm=BedrockChat(model_id="anthropic.claude-3-haiku-20240307-v1:0",client=bedrock,
+def get_mistral_llm():
+    ##create the Mistral Model
+    llm=Bedrock(model_id="mistral.mistral-large-2402-v1:0",client=bedrock,
                 model_kwargs={'max_tokens':512})
     
     return llm
@@ -184,13 +184,13 @@ def main():
                         else:
                             st.error("No text could be extracted from the uploaded PDFs.")
 
-        if st.button("Claude Output"):
+        if st.button("Mistral Output"):
             if not user_question:
                 st.warning("Please enter a question first.")
             else:
                 with st.spinner("Processing..."):
                     faiss_index = FAISS.load_local("faiss_index", bedrock_embeddings, allow_dangerous_deserialization=True)
-                    llm=get_claude_llm()
+                    llm=get_mistral_llm()
                     
                     #faiss_index = get_vector_store(docs)
                     st.write(get_response_llm(llm,faiss_index,user_question))
