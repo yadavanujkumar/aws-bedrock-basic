@@ -28,7 +28,7 @@ from langchain.chains import RetrievalQA
 
 ## Bedrock Clients
 bedrock=boto3.client(service_name="bedrock-runtime", region_name="us-east-1")
-bedrock_embeddings=BedrockEmbeddings(model_id="amazon.titan-embed-text-v2:0",client=bedrock)
+bedrock_embeddings=BedrockEmbeddings(model_id="amazon.titan-embed-text-v1",client=bedrock)
 
 
 ## Data ingestion
@@ -64,11 +64,18 @@ def data_ingestion(uploaded_files=None):
 ## Vector Embedding and vector store
 
 def get_vector_store(docs):
-    vectorstore_faiss=FAISS.from_documents(
-        docs,
-        bedrock_embeddings
-    )
-    vectorstore_faiss.save_local("faiss_index")
+    try:
+        vectorstore_faiss = FAISS.from_documents(
+            docs,
+            bedrock_embeddings
+        )
+        vectorstore_faiss.save_local("faiss_index")
+        return True
+    except Exception as e:
+        st.error(f"❌ **Vector Store Error**: {str(e)}")
+        if "AccessDeniedException" in str(e):
+            st.info("💡 **Tip**: Ensure 'Titan Text Embeddings' access is granted in your AWS Bedrock console for the us-east-1 region.")
+        return False
 
 def get_mistral_llm():
     ##create the Mistral Model
@@ -179,8 +186,8 @@ def main():
                     with st.spinner("Processing..."):
                         docs = data_ingestion(uploaded_files)
                         if docs:
-                            get_vector_store(docs)
-                            st.success("Vector Store Created Successfully!")
+                            if get_vector_store(docs):
+                                st.success("Vector Store Created Successfully!")
                         else:
                             st.error("No text could be extracted from the uploaded PDFs.")
 
