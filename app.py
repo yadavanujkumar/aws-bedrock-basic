@@ -1,0 +1,182 @@
+import json
+import os
+import sys
+import boto3
+import streamlit as st
+import base64
+import random
+
+## We will be suing Titan Embeddings Model To generate Embedding
+
+from langchain_community.embeddings import BedrockEmbeddings
+from langchain_community.llms import Bedrock
+from langchain_community.chat_models import BedrockChat
+
+## Data Ingestion
+
+import numpy as np
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import PyPDFDirectoryLoader
+
+# Vector Embedding And Vector Store
+
+from langchain_community.vectorstores import FAISS
+
+## LLm Models
+from langchain.prompts import PromptTemplate
+from langchain.chains import RetrievalQA
+
+## Bedrock Clients
+bedrock=boto3.client(service_name="bedrock-runtime")
+bedrock_embeddings=BedrockEmbeddings(model_id="amazon.titan-embed-text-v2:0",client=bedrock)
+
+
+## Data ingestion
+def data_ingestion():
+    loader=PyPDFDirectoryLoader("data")
+    documents=loader.load()
+
+    # - in our testing Character split works better with this PDF data set
+    text_splitter=RecursiveCharacterTextSplitter(chunk_size=10000,
+                                                 chunk_overlap=1000)
+    
+    docs=text_splitter.split_documents(documents)
+    return docs
+
+## Vector Embedding and vector store
+
+def get_vector_store(docs):
+    vectorstore_faiss=FAISS.from_documents(
+        docs,
+        bedrock_embeddings
+    )
+    vectorstore_faiss.save_local("faiss_index")
+
+def get_claude_llm():
+    ##create the Anthropic Model
+    llm=BedrockChat(model_id="anthropic.claude-3-7-sonnet-20250219-v1:0",client=bedrock,
+                model_kwargs={'max_tokens':512})
+    
+    return llm
+
+def get_llama2_llm():
+    ##create the Anthropic Model
+    llm=Bedrock(model_id="meta.llama3-70b-instruct-v1:0",client=bedrock,
+                model_kwargs={'max_gen_len':512})
+    
+    return llm
+
+def get_image_response(prompt_content):
+    # Image generation might require us-east-1
+    bedrock_image = boto3.client(service_name="bedrock-runtime", region_name="us-east-1")
+    
+    payload = {
+        "taskType": "TEXT_IMAGE",
+        "textToImageParams": {
+            "text": prompt_content
+        },
+        "imageGenerationConfig": {
+            "numberOfImages": 1,
+            "height": 512,
+            "width": 512,
+            "cfgScale": 8.0,
+            "seed": random.randint(0, 2147483647)
+        }
+    }
+
+    body = json.dumps(payload)
+    model_id = "amazon.titan-image-generator-v2:0"
+
+    response = bedrock_image.invoke_model(
+        body=body,
+        modelId=model_id,
+        accept="application/json",
+        contentType="application/json"
+    )
+
+    response_body = json.loads(response.get("body").read())
+    base64_image = response_body["images"][0]
+    image_bytes = base64.b64decode(base64_image)
+    return image_bytes
+
+prompt_template = """
+
+Human: Use the following pieces of context to provide a 
+concise answer to the question at the end but usse atleast summarize with 
+250 words with detailed explaantions. If you don't know the answer, 
+just say that you don't know, don't try to make up an answer.
+<context>
+{context}
+</context
+
+Question: {question}
+
+Assistant:"""
+
+PROMPT = PromptTemplate(
+    template=prompt_template, input_variables=["context", "question"]
+)
+
+def get_response_llm(llm,vectorstore_faiss,query):
+    qa = RetrievalQA.from_chain_type(
+    llm=llm,
+    chain_type="stuff",
+    retriever=vectorstore_faiss.as_retriever(
+        search_type="similarity", search_kwargs={"k": 3}
+    ),
+    return_source_documents=True,
+    chain_type_kwargs={"prompt": PROMPT}
+)
+    answer=qa({"query":query})
+    return answer['result']
+
+
+def main():
+    st.set_page_config("Bedrock Multi-Tool")
+    
+    st.header("Bedrock Multi-Tool: Chat & Image💁")
+
+    tab1, tab2 = st.tabs(["Chat PDF", "Image Generation"])
+
+    with tab1:
+        user_question = st.text_input("Ask a Question from the PDF Files")
+
+        with st.sidebar:
+            st.title("Update Or Create Vector Store:")
+            
+            if st.button("Vectors Update"):
+                with st.spinner("Processing..."):
+                    docs = data_ingestion()
+                    get_vector_store(docs)
+                    st.success("Done")
+
+        if st.button("Claude Output"):
+            with st.spinner("Processing..."):
+                faiss_index = FAISS.load_local("faiss_index", bedrock_embeddings, allow_dangerous_deserialization=True)
+                llm=get_claude_llm()
+                
+                #faiss_index = get_vector_store(docs)
+                st.write(get_response_llm(llm,faiss_index,user_question))
+                st.success("Done")
+
+        if st.button("Llama2 Output"):
+            with st.spinner("Processing..."):
+                faiss_index = FAISS.load_local("faiss_index", bedrock_embeddings, allow_dangerous_deserialization=True)
+                llm=get_llama2_llm()
+                
+                #faiss_index = get_vector_store(docs)
+                st.write(get_response_llm(llm,faiss_index,user_question))
+                st.success("Done")
+
+    with tab2:
+        st.header("Image Generation using Nova Canvas")
+        image_prompt = st.text_input("Enter your image prompt")
+        
+        if st.button("Generate Image"):
+            with st.spinner("Generating..."):
+                image_bytes = get_image_response(image_prompt)
+                st.image(image_bytes)
+                st.success("Generated!")
+
+if __name__ == "__main__":
+    main()
