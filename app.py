@@ -27,32 +27,53 @@ from langchain_core.prompts import PromptTemplate
 from langchain.chains import RetrievalQA
 
 ## Bedrock Clients
+## Bedrock Clients
+@st.cache_resource
 def get_bedrock_client(region_name="us-east-1"):
-    # Attempt to get region and credentials from environment or st.secrets
-    region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
-    
-    # Check if we are on Streamlit Cloud and have secrets
-    if "aws" in st.secrets:
-        # User might use different key names, let's be flexible
-        aws_secrets = st.secrets["aws"]
-        access_key = aws_secrets.get("access_key_id") or aws_secrets.get("aws_access_key_id")
-        secret_key = aws_secrets.get("secret_access_key") or aws_secrets.get("aws_secret_access_key")
-        target_region = region_name or aws_secrets.get("region") or aws_secrets.get("aws_region") or region
-        
-        if access_key and secret_key:
-            print(f"DEBUG: Initializing Bedrock client with Streamlit secrets in {target_region}")
-            return boto3.client(
-                service_name="bedrock-runtime",
-                region_name=target_region,
-                aws_access_key_id=access_key,
-                aws_secret_access_key=secret_key
-            )
-    
-    print(f"DEBUG: Initializing Bedrock client with default environment in {region}")
-    return boto3.client(service_name="bedrock-runtime", region_name=region)
+    # Attempt to get credentials from st.secrets (Streamlit Cloud way)
+    try:
+        if "aws" in st.secrets:
+            s = st.secrets["aws"]
+            access_key = s.get("access_key_id") or s.get("aws_access_key_id")
+            secret_key = s.get("secret_access_key") or s.get("aws_secret_access_key")
+            target_region = s.get("region") or s.get("aws_region") or region_name
+            
+            if access_key and secret_key:
+                return boto3.client(
+                    service_name="bedrock-runtime",
+                    region_name=target_region,
+                    aws_access_key_id=access_key,
+                    aws_secret_access_key=secret_key
+                )
+    except Exception as e:
+        print(f"DEBUG: Error reading st.secrets['aws']: {e}")
 
-bedrock = get_bedrock_client()
-bedrock_embeddings = BedrockEmbeddings(model_id="amazon.titan-embed-text-v1", client=bedrock)
+    # Fallback to default environment (Local way)
+    return boto3.client(service_name="bedrock-runtime", region_name=region_name)
+
+@st.cache_resource
+def get_embeddings_client():
+    bedrock_client = get_bedrock_client()
+    # Also pass credentials directly to BedrockEmbeddings for robustness
+    try:
+        if "aws" in st.secrets:
+            s = st.secrets["aws"]
+            access_key = s.get("access_key_id") or s.get("aws_access_key_id")
+            secret_key = s.get("secret_access_key") or s.get("aws_secret_access_key")
+            target_region = s.get("region") or s.get("aws_region") or "us-east-1"
+            
+            if access_key and secret_key:
+                return BedrockEmbeddings(
+                    model_id="amazon.titan-embed-text-v1",
+                    client=bedrock_client,
+                    aws_access_key_id=access_key,
+                    aws_secret_access_key=secret_key,
+                    region_name=target_region
+                )
+    except Exception:
+        pass
+        
+    return BedrockEmbeddings(model_id="amazon.titan-embed-text-v1", client=bedrock_client)
 
 
 ## Data ingestion
@@ -89,9 +110,10 @@ def data_ingestion(uploaded_files=None):
 
 def get_vector_store(docs):
     try:
+        embeddings = get_embeddings_client()
         vectorstore_faiss = FAISS.from_documents(
             docs,
-            bedrock_embeddings
+            embeddings
         )
         vectorstore_faiss.save_local("faiss_index")
         return True
@@ -103,14 +125,14 @@ def get_vector_store(docs):
 
 def get_mistral_llm():
     ##create the Mistral Model
-    llm=Bedrock(model_id="mistral.mistral-large-2402-v1:0",client=bedrock,
+    llm=Bedrock(model_id="mistral.mistral-large-2402-v1:0",client=get_bedrock_client(),
                 model_kwargs={'max_tokens':512})
     
     return llm
 
 def get_llama2_llm():
     ##create the Anthropic Model
-    llm=Bedrock(model_id="meta.llama3-70b-instruct-v1:0",client=bedrock,
+    llm=Bedrock(model_id="meta.llama3-70b-instruct-v1:0",client=get_bedrock_client(),
                 model_kwargs={'max_gen_len':512})
     
     return llm
@@ -201,14 +223,33 @@ def main():
 
         with st.sidebar:
             st.title("AWS Configuration Status:")
-            # Diagnostic for credentials
+            # Detailed diagnostic
+            has_secrets = "aws" in st.secrets
+            if has_secrets:
+                s = st.secrets["aws"]
+                ak = s.get("access_key_id") or s.get("aws_access_key_id")
+                sk = s.get("secret_access_key") or s.get("aws_secret_access_key")
+                if ak and sk:
+                    st.success("✅ AWS Secrets Detected")
+                else:
+                    st.warning("⚠️ AWS Secrets found but keys are missing or invalidly named.")
+            else:
+                st.error("❌ AWS Secrets Missing")
+                st.info("💡 **Fix**: Go to App Settings > Secrets and add your AWS credentials.")
+
+            # Try a live session check
             try:
-                # This will only succeed if credentials are found
-                boto3.Session().get_credentials()
-                st.success("✅ AWS Credentials Located")
-            except Exception:
-                st.error("❌ AWS Credentials Missing")
-                st.info("💡 **Fix**: Go to Streamlit Cloud > Settings > Secrets and add your AWS keys as shown in the README.")
+                # This checks if boto3 can find ANY credentials (env or secrets)
+                session = boto3.Session()
+                # If we are on Streamlit Cloud, we might need to manually check st.secrets
+                # since boto3 doesn't automatically look there.
+                creds = session.get_credentials()
+                if creds or has_secrets:
+                    st.success("✅ AWS Connection Ready")
+                else:
+                    st.error("❌ AWS Connection Failed (No Credentials)")
+            except Exception as e:
+                st.error(f"❌ Diagnostic Error: {e}")
 
             st.title("Upload PDFs & Create Vector Store:")
             uploaded_files = st.file_uploader("Choose PDF files", type="pdf", accept_multiple_files=True)
@@ -230,7 +271,8 @@ def main():
                 st.warning("Please enter a question first.")
             else:
                 with st.spinner("Processing..."):
-                    faiss_index = FAISS.load_local("faiss_index", bedrock_embeddings, allow_dangerous_deserialization=True)
+                    embeddings = get_embeddings_client()
+                    faiss_index = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
                     llm=get_mistral_llm()
                     
                     #faiss_index = get_vector_store(docs)
@@ -242,7 +284,8 @@ def main():
                 st.warning("Please enter a question first.")
             else:
                 with st.spinner("Processing..."):
-                    faiss_index = FAISS.load_local("faiss_index", bedrock_embeddings, allow_dangerous_deserialization=True)
+                    embeddings = get_embeddings_client()
+                    faiss_index = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
                     llm=get_llama2_llm()
                     
                     #faiss_index = get_vector_store(docs)
