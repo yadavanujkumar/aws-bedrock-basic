@@ -136,17 +136,26 @@ PROMPT = PromptTemplate(
 )
 
 def get_response_llm(llm,vectorstore_faiss,query):
-    qa = RetrievalQA.from_chain_type(
-    llm=llm,
-    chain_type="stuff",
-    retriever=vectorstore_faiss.as_retriever(
-        search_type="similarity", search_kwargs={"k": 3}
-    ),
-    return_source_documents=True,
-    chain_type_kwargs={"prompt": PROMPT}
-)
-    answer=qa({"query":query})
-    return answer['result']
+    try:
+        qa = RetrievalQA.from_chain_type(
+            llm=llm,
+            chain_type="stuff",
+            retriever=vectorstore_faiss.as_retriever(
+                search_type="similarity", search_kwargs={"k": 3}
+            ),
+            return_source_documents=True,
+            chain_type_kwargs={"prompt": PROMPT}
+        )
+        answer=qa({"query":query})
+        return answer['result']
+    except Exception as e:
+        error_msg = str(e)
+        if "ResourceNotFoundException" in error_msg and "Anthropic" in error_msg:
+            return "❌ **Model Access Error**: You need to submit the 'Anthropic use case details' form in your AWS Bedrock console (Model access section) before using Claude."
+        elif "ValidationException" in error_msg and "content filters" in error_msg:
+            return "⚠️ **Content Filter Blocked**: Your prompt or the retrieved context was flagged by AWS content filters. Please try rephrasing."
+        else:
+            return f"❌ **An error occurred**: {error_msg}"
 
 
 def main():
@@ -176,32 +185,50 @@ def main():
                             st.error("No text could be extracted from the uploaded PDFs.")
 
         if st.button("Claude Output"):
-            with st.spinner("Processing..."):
-                faiss_index = FAISS.load_local("faiss_index", bedrock_embeddings, allow_dangerous_deserialization=True)
-                llm=get_claude_llm()
-                
-                #faiss_index = get_vector_store(docs)
-                st.write(get_response_llm(llm,faiss_index,user_question))
-                st.success("Done")
+            if not user_question:
+                st.warning("Please enter a question first.")
+            else:
+                with st.spinner("Processing..."):
+                    faiss_index = FAISS.load_local("faiss_index", bedrock_embeddings, allow_dangerous_deserialization=True)
+                    llm=get_claude_llm()
+                    
+                    #faiss_index = get_vector_store(docs)
+                    st.write(get_response_llm(llm,faiss_index,user_question))
+                    st.success("Done")
 
         if st.button("Llama2 Output"):
-            with st.spinner("Processing..."):
-                faiss_index = FAISS.load_local("faiss_index", bedrock_embeddings, allow_dangerous_deserialization=True)
-                llm=get_llama2_llm()
-                
-                #faiss_index = get_vector_store(docs)
-                st.write(get_response_llm(llm,faiss_index,user_question))
-                st.success("Done")
+            if not user_question:
+                st.warning("Please enter a question first.")
+            else:
+                with st.spinner("Processing..."):
+                    faiss_index = FAISS.load_local("faiss_index", bedrock_embeddings, allow_dangerous_deserialization=True)
+                    llm=get_llama2_llm()
+                    
+                    #faiss_index = get_vector_store(docs)
+                    st.write(get_response_llm(llm,faiss_index,user_question))
+                    st.success("Done")
 
     with tab2:
         st.header("Image Generation using Nova Canvas")
         image_prompt = st.text_input("Enter your image prompt")
         
         if st.button("Generate Image"):
-            with st.spinner("Generating..."):
-                image_bytes = get_image_response(image_prompt)
-                st.image(image_bytes)
-                st.success("Generated!")
+            if not image_prompt:
+                st.warning("Please enter an image prompt first.")
+            else:
+                with st.spinner("Generating..."):
+                    try:
+                        image_bytes = get_image_response(image_prompt)
+                        st.image(image_bytes)
+                        st.success("Generated!")
+                    except Exception as e:
+                        error_msg = str(e)
+                        if "ValidationException" in error_msg and "content filters" in error_msg:
+                            st.error("⚠️ **Content Filter Blocked**: Your prompt was flagged by AWS content filters. Please try rephrasing.")
+                        elif "ModelNotAllowedException" in error_msg or "AccessDeniedException" in error_msg:
+                            st.error("❌ **Access Denied**: Ensure you have granted access to 'Titan Image Generator V2' in the AWS Bedrock console for the us-east-1 region.")
+                        else:
+                            st.error(f"❌ **Generation Failed**: {error_msg}")
 
 if __name__ == "__main__":
     main()

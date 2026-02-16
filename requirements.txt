@@ -1,10 +1,10 @@
 boto3
 awscli
 streamlit
-langchain==0.3.17
-langchain-community==0.3.17
-langchain-text-splitters==0.3.6
-langchain-core==0.3.17
+langchain>=0.3.33,<0.4.0
+langchain-community>=0.3.0,<0.4.0
+langchain-text-splitters>=0.3.0,<0.4.0
+langchain-core>=0.3.33,<0.4.0
 faiss-cpu
 pypdf
 numpy
