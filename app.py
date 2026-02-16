@@ -72,7 +72,7 @@ def get_vector_store(docs):
 
 def get_claude_llm():
     ##create the Anthropic Model
-    llm=BedrockChat(model_id="anthropic.claude-3-7-sonnet-20250219-v1:0",client=bedrock,
+    llm=BedrockChat(model_id="anthropic.claude-3-haiku-20240307-v1:0",client=bedrock,
                 model_kwargs={'max_tokens':512})
     
     return llm
@@ -125,7 +125,7 @@ concise answer to the question at the end but usse atleast summarize with
 just say that you don't know, don't try to make up an answer.
 <context>
 {context}
-</context
+</context>
 
 Question: {question}
 
