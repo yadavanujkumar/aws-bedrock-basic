@@ -27,8 +27,23 @@ from langchain_core.prompts import PromptTemplate
 from langchain.chains import RetrievalQA
 
 ## Bedrock Clients
-bedrock=boto3.client(service_name="bedrock-runtime", region_name="us-east-1")
-bedrock_embeddings=BedrockEmbeddings(model_id="amazon.titan-embed-text-v1",client=bedrock)
+def get_bedrock_client():
+    # Attempt to get region and credentials from environment or st.secrets
+    region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+    
+    # Check if we are on Streamlit Cloud and have secrets
+    if "AWS_ACCESS_KEY_ID" not in os.environ and "aws" in st.secrets:
+        return boto3.client(
+            service_name="bedrock-runtime",
+            region_name=st.secrets["aws"].get("region", region),
+            aws_access_key_id=st.secrets["aws"]["access_key_id"],
+            aws_secret_access_key=st.secrets["aws"]["secret_access_key"]
+        )
+    
+    return boto3.client(service_name="bedrock-runtime", region_name=region)
+
+bedrock = get_bedrock_client()
+bedrock_embeddings = BedrockEmbeddings(model_id="amazon.titan-embed-text-v1", client=bedrock)
 
 
 ## Data ingestion
@@ -176,6 +191,16 @@ def main():
         user_question = st.text_input("Ask a Question from the PDF Files")
 
         with st.sidebar:
+            st.title("AWS Configuration Status:")
+            # Diagnostic for credentials
+            try:
+                # This will only succeed if credentials are found
+                boto3.Session().get_credentials()
+                st.success("✅ AWS Credentials Located")
+            except Exception:
+                st.error("❌ AWS Credentials Missing")
+                st.info("💡 **Fix**: Go to Streamlit Cloud > Settings > Secrets and add your AWS keys as shown in the README.")
+
             st.title("Upload PDFs & Create Vector Store:")
             uploaded_files = st.file_uploader("Choose PDF files", type="pdf", accept_multiple_files=True)
             
