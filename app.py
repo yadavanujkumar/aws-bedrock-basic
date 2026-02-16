@@ -14,9 +14,9 @@ from langchain_community.chat_models import BedrockChat
 
 ## Data Ingestion
 
-import numpy as np
+import tempfile
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import PyPDFDirectoryLoader
+from langchain_community.document_loaders import PyPDFLoader, PyPDFDirectoryLoader
 
 # Vector Embedding And Vector Store
 
@@ -32,15 +32,33 @@ bedrock_embeddings=BedrockEmbeddings(model_id="amazon.titan-embed-text-v2:0",cli
 
 
 ## Data ingestion
-def data_ingestion():
-    loader=PyPDFDirectoryLoader("data")
-    documents=loader.load()
+def data_ingestion(uploaded_files=None):
+    documents = []
+    if uploaded_files:
+        for uploaded_file in uploaded_files:
+            # Save uploaded file to a temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                tmp_file.write(uploaded_file.getvalue())
+                tmp_path = tmp_file.name
+            
+            try:
+                loader = PyPDFLoader(tmp_path)
+                documents.extend(loader.load())
+            finally:
+                # Ensure the temporary file is deleted
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+    else:
+        # Fallback to local data directory if no files uploaded
+        if os.path.exists("data"):
+            loader = PyPDFDirectoryLoader("data")
+            documents = loader.load()
 
     # - in our testing Character split works better with this PDF data set
-    text_splitter=RecursiveCharacterTextSplitter(chunk_size=10000,
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=10000,
                                                  chunk_overlap=1000)
     
-    docs=text_splitter.split_documents(documents)
+    docs = text_splitter.split_documents(documents)
     return docs
 
 ## Vector Embedding and vector store
@@ -142,13 +160,20 @@ def main():
         user_question = st.text_input("Ask a Question from the PDF Files")
 
         with st.sidebar:
-            st.title("Update Or Create Vector Store:")
+            st.title("Upload PDFs & Create Vector Store:")
+            uploaded_files = st.file_uploader("Choose PDF files", type="pdf", accept_multiple_files=True)
             
             if st.button("Vectors Update"):
-                with st.spinner("Processing..."):
-                    docs = data_ingestion()
-                    get_vector_store(docs)
-                    st.success("Done")
+                if not uploaded_files:
+                    st.warning("Please upload at least one PDF file first.")
+                else:
+                    with st.spinner("Processing..."):
+                        docs = data_ingestion(uploaded_files)
+                        if docs:
+                            get_vector_store(docs)
+                            st.success("Vector Store Created Successfully!")
+                        else:
+                            st.error("No text could be extracted from the uploaded PDFs.")
 
         if st.button("Claude Output"):
             with st.spinner("Processing..."):

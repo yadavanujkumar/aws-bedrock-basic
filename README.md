@@ -4,7 +4,8 @@ A basic Streamlit-based application that leverages Amazon Bedrock for simple PDF
 
 ## Features
 
-- **Chat PDF**: Upload and query PDF documents using advanced LLMs and vector search.
+- **Chat PDF**: Upload your own PDF documents and query them using advanced LLMs and vector search.
+  - **Dynamic Upload**: Upload multiple PDFs via the sidebar.
   - **Vector Store**: Powered by FAISS and Amazon Titan Embeddings V2.
   - **LLMs**: Supports Anthropic Claude 3.7 Sonnet and Meta Llama 3 70B.
 - **Image Generation**: Generate high-quality images from text prompts.
@@ -41,10 +42,11 @@ python -m streamlit run app.py
 ```
 
 ### PDF Chat Workflow
-1.  Place your PDF files in a folder named `data`.
-2.  Click **"Vectors Update"** in the sidebar to process the documents.
-3.  Enter your question in the text input.
-4.  Switch between **Claude** or **Llama** outputs to get answers.
+1.  Navigate to the **"Chat PDF"** tab.
+2.  In the sidebar, click **"Browse files"** to upload one or more PDF documents.
+3.  Click **"Vectors Update"** to process and index the uploaded files.
+4.  Enter your question in the text input on the main page.
+5.  Click either **"Claude Output"** or **"Llama2 Output"** to get your answer.
 
 ### Image Generation Workflow
 1.  Switch to the **"Image Generation"** tab.
